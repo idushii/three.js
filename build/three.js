@@ -147,20 +147,6 @@
 	const RGBA_ASTC_12x10_Format = 37820;
 	const RGBA_ASTC_12x12_Format = 37821;
 	const RGBA_BPTC_Format = 36492;
-	const SRGB8_ALPHA8_ASTC_4x4_Format = 37840;
-	const SRGB8_ALPHA8_ASTC_5x4_Format = 37841;
-	const SRGB8_ALPHA8_ASTC_5x5_Format = 37842;
-	const SRGB8_ALPHA8_ASTC_6x5_Format = 37843;
-	const SRGB8_ALPHA8_ASTC_6x6_Format = 37844;
-	const SRGB8_ALPHA8_ASTC_8x5_Format = 37845;
-	const SRGB8_ALPHA8_ASTC_8x6_Format = 37846;
-	const SRGB8_ALPHA8_ASTC_8x8_Format = 37847;
-	const SRGB8_ALPHA8_ASTC_10x5_Format = 37848;
-	const SRGB8_ALPHA8_ASTC_10x6_Format = 37849;
-	const SRGB8_ALPHA8_ASTC_10x8_Format = 37850;
-	const SRGB8_ALPHA8_ASTC_10x10_Format = 37851;
-	const SRGB8_ALPHA8_ASTC_12x10_Format = 37852;
-	const SRGB8_ALPHA8_ASTC_12x12_Format = 37853;
 	const LoopOnce = 2200;
 	const LoopRepeat = 2201;
 	const LoopPingPong = 2202;
@@ -2515,7 +2501,7 @@
 		}
 
 		slerpQuaternions(qa, qb, t) {
-			this.copy(qa).slerp(qb, t);
+			return this.copy(qa).slerp(qb, t);
 		}
 
 		random() {
@@ -9814,7 +9800,7 @@
 
 	var transmission_fragment = "#ifdef USE_TRANSMISSION\n\tfloat transmissionAlpha = 1.0;\n\tfloat transmissionFactor = transmission;\n\tfloat thicknessFactor = thickness;\n\t#ifdef USE_TRANSMISSIONMAP\n\t\ttransmissionFactor *= texture2D( transmissionMap, vUv ).r;\n\t#endif\n\t#ifdef USE_THICKNESSMAP\n\t\tthicknessFactor *= texture2D( thicknessMap, vUv ).g;\n\t#endif\n\tvec3 pos = vWorldPosition;\n\tvec3 v = normalize( cameraPosition - pos );\n\tvec3 n = inverseTransformDirection( normal, viewMatrix );\n\tvec4 transmission = getIBLVolumeRefraction(\n\t\tn, v, roughnessFactor, material.diffuseColor, material.specularColor, material.specularF90,\n\t\tpos, modelMatrix, viewMatrix, projectionMatrix, ior, thicknessFactor,\n\t\tattenuationColor, attenuationDistance );\n\ttotalDiffuse = mix( totalDiffuse, transmission.rgb, transmissionFactor );\n\ttransmissionAlpha = mix( transmissionAlpha, transmission.a, transmissionFactor );\n#endif";
 
-	var transmission_pars_fragment = "#ifdef USE_TRANSMISSION\n\tuniform float transmission;\n\tuniform float thickness;\n\tuniform float attenuationDistance;\n\tuniform vec3 attenuationColor;\n\t#ifdef USE_TRANSMISSIONMAP\n\t\tuniform sampler2D transmissionMap;\n\t#endif\n\t#ifdef USE_THICKNESSMAP\n\t\tuniform sampler2D thicknessMap;\n\t#endif\n\tuniform vec2 transmissionSamplerSize;\n\tuniform sampler2D transmissionSamplerMap;\n\tuniform mat4 modelMatrix;\n\tuniform mat4 projectionMatrix;\n\tvarying vec3 vWorldPosition;\n\tvec3 getVolumeTransmissionRay( vec3 n, vec3 v, float thickness, float ior, mat4 modelMatrix ) {\n\t\tvec3 refractionVector = refract( - v, normalize( n ), 1.0 / ior );\n\t\tvec3 modelScale;\n\t\tmodelScale.x = length( vec3( modelMatrix[ 0 ].xyz ) );\n\t\tmodelScale.y = length( vec3( modelMatrix[ 1 ].xyz ) );\n\t\tmodelScale.z = length( vec3( modelMatrix[ 2 ].xyz ) );\n\t\treturn normalize( refractionVector ) * thickness * modelScale;\n\t}\n\tfloat applyIorToRoughness( float roughness, float ior ) {\n\t\treturn roughness * clamp( ior * 2.0 - 2.0, 0.0, 1.0 );\n\t}\n\tvec4 getTransmissionSample( vec2 fragCoord, float roughness, float ior ) {\n\t\tfloat framebufferLod = log2( transmissionSamplerSize.x ) * applyIorToRoughness( roughness, ior );\n\t\t#ifdef TEXTURE_LOD_EXT\n\t\t\treturn texture2DLodEXT( transmissionSamplerMap, fragCoord.xy, framebufferLod );\n\t\t#else\n\t\t\treturn texture2D( transmissionSamplerMap, fragCoord.xy, framebufferLod );\n\t\t#endif\n\t}\n\tvec3 applyVolumeAttenuation( vec3 radiance, float transmissionDistance, vec3 attenuationColor, float attenuationDistance ) {\n\t\tif ( attenuationDistance == 0.0 ) {\n\t\t\treturn radiance;\n\t\t} else {\n\t\t\tvec3 attenuationCoefficient = -log( attenuationColor ) / attenuationDistance;\n\t\t\tvec3 transmittance = exp( - attenuationCoefficient * transmissionDistance );\t\t\treturn transmittance * radiance;\n\t\t}\n\t}\n\tvec4 getIBLVolumeRefraction( vec3 n, vec3 v, float roughness, vec3 diffuseColor, vec3 specularColor, float specularF90,\n\t\tvec3 position, mat4 modelMatrix, mat4 viewMatrix, mat4 projMatrix, float ior, float thickness,\n\t\tvec3 attenuationColor, float attenuationDistance ) {\n\t\tvec3 transmissionRay = getVolumeTransmissionRay( n, v, thickness, ior, modelMatrix );\n\t\tvec3 refractedRayExit = position + transmissionRay;\n\t\tvec4 ndcPos = projMatrix * viewMatrix * vec4( refractedRayExit, 1.0 );\n\t\tvec2 refractionCoords = ndcPos.xy / ndcPos.w;\n\t\trefractionCoords += 1.0;\n\t\trefractionCoords /= 2.0;\n\t\tvec4 transmittedLight = getTransmissionSample( refractionCoords, roughness, ior );\n\t\tvec3 attenuatedColor = applyVolumeAttenuation( transmittedLight.rgb, length( transmissionRay ), attenuationColor, attenuationDistance );\n\t\tvec3 F = EnvironmentBRDF( n, v, specularColor, specularF90, roughness );\n\t\treturn vec4( ( 1.0 - F ) * attenuatedColor * diffuseColor, transmittedLight.a );\n\t}\n#endif";
+	var transmission_pars_fragment = "#ifdef USE_TRANSMISSION\n\tuniform float transmission;\n\tuniform float thickness;\n\tuniform float attenuationDistance;\n\tuniform vec3 attenuationColor;\n\t#ifdef USE_TRANSMISSIONMAP\n\t\tuniform sampler2D transmissionMap;\n\t#endif\n\t#ifdef USE_THICKNESSMAP\n\t\tuniform sampler2D thicknessMap;\n\t#endif\n\tuniform vec2 transmissionSamplerSize;\n\tuniform sampler2D transmissionSamplerMap;\n\tuniform mat4 modelMatrix;\n\tuniform mat4 projectionMatrix;\n\tvarying vec3 vWorldPosition;\n\tvec3 getVolumeTransmissionRay( const in vec3 n, const in vec3 v, const in float thickness, const in float ior, const in mat4 modelMatrix ) {\n\t\tvec3 refractionVector = refract( - v, normalize( n ), 1.0 / ior );\n\t\tvec3 modelScale;\n\t\tmodelScale.x = length( vec3( modelMatrix[ 0 ].xyz ) );\n\t\tmodelScale.y = length( vec3( modelMatrix[ 1 ].xyz ) );\n\t\tmodelScale.z = length( vec3( modelMatrix[ 2 ].xyz ) );\n\t\treturn normalize( refractionVector ) * thickness * modelScale;\n\t}\n\tfloat applyIorToRoughness( const in float roughness, const in float ior ) {\n\t\treturn roughness * clamp( ior * 2.0 - 2.0, 0.0, 1.0 );\n\t}\n\tvec4 getTransmissionSample( const in vec2 fragCoord, const in float roughness, const in float ior ) {\n\t\tfloat framebufferLod = log2( transmissionSamplerSize.x ) * applyIorToRoughness( roughness, ior );\n\t\t#ifdef TEXTURE_LOD_EXT\n\t\t\treturn texture2DLodEXT( transmissionSamplerMap, fragCoord.xy, framebufferLod );\n\t\t#else\n\t\t\treturn texture2D( transmissionSamplerMap, fragCoord.xy, framebufferLod );\n\t\t#endif\n\t}\n\tvec3 applyVolumeAttenuation( const in vec3 radiance, const in float transmissionDistance, const in vec3 attenuationColor, const in float attenuationDistance ) {\n\t\tif ( attenuationDistance == 0.0 ) {\n\t\t\treturn radiance;\n\t\t} else {\n\t\t\tvec3 attenuationCoefficient = -log( attenuationColor ) / attenuationDistance;\n\t\t\tvec3 transmittance = exp( - attenuationCoefficient * transmissionDistance );\t\t\treturn transmittance * radiance;\n\t\t}\n\t}\n\tvec4 getIBLVolumeRefraction( const in vec3 n, const in vec3 v, const in float roughness, const in vec3 diffuseColor,\n\t\tconst in vec3 specularColor, const in float specularF90, const in vec3 position, const in mat4 modelMatrix,\n\t\tconst in mat4 viewMatrix, const in mat4 projMatrix, const in float ior, const in float thickness,\n\t\tconst in vec3 attenuationColor, const in float attenuationDistance ) {\n\t\tvec3 transmissionRay = getVolumeTransmissionRay( n, v, thickness, ior, modelMatrix );\n\t\tvec3 refractedRayExit = position + transmissionRay;\n\t\tvec4 ndcPos = projMatrix * viewMatrix * vec4( refractedRayExit, 1.0 );\n\t\tvec2 refractionCoords = ndcPos.xy / ndcPos.w;\n\t\trefractionCoords += 1.0;\n\t\trefractionCoords /= 2.0;\n\t\tvec4 transmittedLight = getTransmissionSample( refractionCoords, roughness, ior );\n\t\tvec3 attenuatedColor = applyVolumeAttenuation( transmittedLight.rgb, length( transmissionRay ), attenuationColor, attenuationDistance );\n\t\tvec3 F = EnvironmentBRDF( n, v, specularColor, specularF90, roughness );\n\t\treturn vec4( ( 1.0 - F ) * attenuatedColor * diffuseColor, transmittedLight.a );\n\t}\n#endif";
 
 	var uv_pars_fragment = "#if ( defined( USE_UV ) && ! defined( UVS_VERTEX_ONLY ) )\n\tvarying vec2 vUv;\n#endif";
 
@@ -10503,7 +10489,7 @@
 				value: null
 			},
 			sheenRoughness: {
-				value: 0
+				value: 1
 			},
 			sheenRoughnessMap: {
 				value: null
@@ -10533,7 +10519,7 @@
 				value: new Color(0x000000)
 			},
 			specularIntensity: {
-				value: 0
+				value: 1
 			},
 			specularIntensityMap: {
 				value: null
@@ -14306,6 +14292,10 @@
 				encoding = LinearEncoding; // disable inline decode for sRGB textures in WebGL 2
 			}
 
+			if (map && map.isCompressedTexture) {
+				encoding = LinearEncoding; // disable inline decode for sRGB compressed textures
+			}
+
 			return encoding;
 		}
 
@@ -16816,7 +16806,7 @@
 			const needsPowerOfTwo = textureNeedsPowerOfTwo(texture) && isPowerOfTwo$1(texture.image) === false;
 			const image = resizeImage(texture.image, needsPowerOfTwo, false, maxTextureSize);
 			const supportsMips = isPowerOfTwo$1(image) || isWebGL2,
-						glFormat = utils.convert(texture.format);
+						glFormat = utils.convert(texture.format, texture.encoding);
 			let glType = utils.convert(texture.type),
 					glInternalFormat = getInternalFormat(texture.internalFormat, glFormat, glType, texture.encoding);
 			setTextureParameters(textureType, texture, supportsMips);
@@ -17031,7 +17021,7 @@
 
 			const image = cubeImage[0],
 						supportsMips = isPowerOfTwo$1(image) || isWebGL2,
-						glFormat = utils.convert(texture.format),
+						glFormat = utils.convert(texture.format, texture.encoding),
 						glType = utils.convert(texture.type),
 						glInternalFormat = getInternalFormat(texture.internalFormat, glFormat, glType, texture.encoding);
 			const useTexStorage = isWebGL2 && texture.isVideoTexture !== true;
@@ -17131,7 +17121,7 @@
 
 
 		function setupFrameBufferTexture(framebuffer, renderTarget, texture, attachment, textureTarget) {
-			const glFormat = utils.convert(texture.format);
+			const glFormat = utils.convert(texture.format, texture.encoding);
 			const glType = utils.convert(texture.type);
 			const glInternalFormat = getInternalFormat(texture.internalFormat, glFormat, glType, texture.encoding);
 			const renderTargetProperties = properties.get(renderTarget);
@@ -17200,7 +17190,7 @@
 			} else {
 				// Use the first texture for MRT so far
 				const texture = renderTarget.isWebGLMultipleRenderTargets === true ? renderTarget.texture[0] : renderTarget.texture;
-				const glFormat = utils.convert(texture.format);
+				const glFormat = utils.convert(texture.format, texture.encoding);
 				const glType = utils.convert(texture.type);
 				const glInternalFormat = getInternalFormat(texture.internalFormat, glFormat, glType, texture.encoding);
 				const samples = getRenderTargetSamples(renderTarget);
@@ -17355,7 +17345,7 @@
 
 						_gl.bindRenderbuffer(_gl.RENDERBUFFER, renderTargetProperties.__webglColorRenderbuffer);
 
-						const glFormat = utils.convert(texture.format);
+						const glFormat = utils.convert(texture.format, texture.encoding);
 						const glType = utils.convert(texture.type);
 						const glInternalFormat = getInternalFormat(texture.internalFormat, glFormat, glType, texture.encoding);
 						const samples = getRenderTargetSamples(renderTarget);
@@ -17563,7 +17553,7 @@
 	function WebGLUtils(gl, extensions, capabilities) {
 		const isWebGL2 = capabilities.isWebGL2;
 
-		function convert(p) {
+		function convert(p, encoding = null) {
 			let extension;
 			if (p === UnsignedByteType) return gl.UNSIGNED_BYTE;
 			if (p === UnsignedShort4444Type) return gl.UNSIGNED_SHORT_4_4_4_4;
@@ -17600,20 +17590,34 @@
 			if (p === RGFormat) return gl.RG;
 			if (p === RGIntegerFormat) return gl.RG_INTEGER;
 			if (p === RGBIntegerFormat) return gl.RGB_INTEGER;
-			if (p === RGBAIntegerFormat) return gl.RGBA_INTEGER;
+			if (p === RGBAIntegerFormat) return gl.RGBA_INTEGER; // S3TC
 
 			if (p === RGB_S3TC_DXT1_Format || p === RGBA_S3TC_DXT1_Format || p === RGBA_S3TC_DXT3_Format || p === RGBA_S3TC_DXT5_Format) {
-				extension = extensions.get('WEBGL_compressed_texture_s3tc');
+				if (encoding === sRGBEncoding) {
+					extension = extensions.get('WEBGL_compressed_texture_s3tc_srgb');
 
-				if (extension !== null) {
-					if (p === RGB_S3TC_DXT1_Format) return extension.COMPRESSED_RGB_S3TC_DXT1_EXT;
-					if (p === RGBA_S3TC_DXT1_Format) return extension.COMPRESSED_RGBA_S3TC_DXT1_EXT;
-					if (p === RGBA_S3TC_DXT3_Format) return extension.COMPRESSED_RGBA_S3TC_DXT3_EXT;
-					if (p === RGBA_S3TC_DXT5_Format) return extension.COMPRESSED_RGBA_S3TC_DXT5_EXT;
+					if (extension !== null) {
+						if (p === RGB_S3TC_DXT1_Format) return extension.COMPRESSED_SRGB_S3TC_DXT1_EXT;
+						if (p === RGBA_S3TC_DXT1_Format) return extension.COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+						if (p === RGBA_S3TC_DXT3_Format) return extension.COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
+						if (p === RGBA_S3TC_DXT5_Format) return extension.COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
+					} else {
+						return null;
+					}
 				} else {
-					return null;
+					extension = extensions.get('WEBGL_compressed_texture_s3tc');
+
+					if (extension !== null) {
+						if (p === RGB_S3TC_DXT1_Format) return extension.COMPRESSED_RGB_S3TC_DXT1_EXT;
+						if (p === RGBA_S3TC_DXT1_Format) return extension.COMPRESSED_RGBA_S3TC_DXT1_EXT;
+						if (p === RGBA_S3TC_DXT3_Format) return extension.COMPRESSED_RGBA_S3TC_DXT3_EXT;
+						if (p === RGBA_S3TC_DXT5_Format) return extension.COMPRESSED_RGBA_S3TC_DXT5_EXT;
+					} else {
+						return null;
+					}
 				}
-			}
+			} // PVRTC
+
 
 			if (p === RGB_PVRTC_4BPPV1_Format || p === RGB_PVRTC_2BPPV1_Format || p === RGBA_PVRTC_4BPPV1_Format || p === RGBA_PVRTC_2BPPV1_Format) {
 				extension = extensions.get('WEBGL_compressed_texture_pvrtc');
@@ -17626,7 +17630,8 @@
 				} else {
 					return null;
 				}
-			}
+			} // ETC1
+
 
 			if (p === RGB_ETC1_Format) {
 				extension = extensions.get('WEBGL_compressed_texture_etc1');
@@ -17636,38 +17641,55 @@
 				} else {
 					return null;
 				}
-			}
+			} // ETC2
+
 
 			if (p === RGB_ETC2_Format || p === RGBA_ETC2_EAC_Format) {
 				extension = extensions.get('WEBGL_compressed_texture_etc');
 
 				if (extension !== null) {
-					if (p === RGB_ETC2_Format) return extension.COMPRESSED_RGB8_ETC2;
-					if (p === RGBA_ETC2_EAC_Format) return extension.COMPRESSED_RGBA8_ETC2_EAC;
-				}
-			}
-
-			if (p === RGBA_ASTC_4x4_Format || p === RGBA_ASTC_5x4_Format || p === RGBA_ASTC_5x5_Format || p === RGBA_ASTC_6x5_Format || p === RGBA_ASTC_6x6_Format || p === RGBA_ASTC_8x5_Format || p === RGBA_ASTC_8x6_Format || p === RGBA_ASTC_8x8_Format || p === RGBA_ASTC_10x5_Format || p === RGBA_ASTC_10x6_Format || p === RGBA_ASTC_10x8_Format || p === RGBA_ASTC_10x10_Format || p === RGBA_ASTC_12x10_Format || p === RGBA_ASTC_12x12_Format || p === SRGB8_ALPHA8_ASTC_4x4_Format || p === SRGB8_ALPHA8_ASTC_5x4_Format || p === SRGB8_ALPHA8_ASTC_5x5_Format || p === SRGB8_ALPHA8_ASTC_6x5_Format || p === SRGB8_ALPHA8_ASTC_6x6_Format || p === SRGB8_ALPHA8_ASTC_8x5_Format || p === SRGB8_ALPHA8_ASTC_8x6_Format || p === SRGB8_ALPHA8_ASTC_8x8_Format || p === SRGB8_ALPHA8_ASTC_10x5_Format || p === SRGB8_ALPHA8_ASTC_10x6_Format || p === SRGB8_ALPHA8_ASTC_10x8_Format || p === SRGB8_ALPHA8_ASTC_10x10_Format || p === SRGB8_ALPHA8_ASTC_12x10_Format || p === SRGB8_ALPHA8_ASTC_12x12_Format) {
-				extension = extensions.get('WEBGL_compressed_texture_astc');
-
-				if (extension !== null) {
-					// TODO Complete?
-					return p;
+					if (p === RGB_ETC2_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ETC2 : extension.COMPRESSED_RGB8_ETC2;
+					if (p === RGBA_ETC2_EAC_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ETC2_EAC : extension.COMPRESSED_RGBA8_ETC2_EAC;
 				} else {
 					return null;
 				}
-			}
+			} // ASTC
+
+
+			if (p === RGBA_ASTC_4x4_Format || p === RGBA_ASTC_5x4_Format || p === RGBA_ASTC_5x5_Format || p === RGBA_ASTC_6x5_Format || p === RGBA_ASTC_6x6_Format || p === RGBA_ASTC_8x5_Format || p === RGBA_ASTC_8x6_Format || p === RGBA_ASTC_8x8_Format || p === RGBA_ASTC_10x5_Format || p === RGBA_ASTC_10x6_Format || p === RGBA_ASTC_10x8_Format || p === RGBA_ASTC_10x10_Format || p === RGBA_ASTC_12x10_Format || p === RGBA_ASTC_12x12_Format) {
+				extension = extensions.get('WEBGL_compressed_texture_astc');
+
+				if (extension !== null) {
+					if (p === RGBA_ASTC_4x4_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR : extension.COMPRESSED_RGBA_ASTC_4x4_KHR;
+					if (p === RGBA_ASTC_5x4_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR : extension.COMPRESSED_RGBA_ASTC_5x4_KHR;
+					if (p === RGBA_ASTC_5x5_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR : extension.COMPRESSED_RGBA_ASTC_5x5_KHR;
+					if (p === RGBA_ASTC_6x5_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR : extension.COMPRESSED_RGBA_ASTC_6x5_KHR;
+					if (p === RGBA_ASTC_6x6_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR : extension.COMPRESSED_RGBA_ASTC_6x6_KHR;
+					if (p === RGBA_ASTC_8x5_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR : extension.COMPRESSED_RGBA_ASTC_8x5_KHR;
+					if (p === RGBA_ASTC_8x6_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR : extension.COMPRESSED_RGBA_ASTC_8x6_KHR;
+					if (p === RGBA_ASTC_8x8_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR : extension.COMPRESSED_RGBA_ASTC_8x8_KHR;
+					if (p === RGBA_ASTC_10x5_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR : extension.COMPRESSED_RGBA_ASTC_10x5_KHR;
+					if (p === RGBA_ASTC_10x6_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR : extension.COMPRESSED_RGBA_ASTC_10x6_KHR;
+					if (p === RGBA_ASTC_10x8_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR : extension.COMPRESSED_RGBA_ASTC_10x8_KHR;
+					if (p === RGBA_ASTC_10x10_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR : extension.COMPRESSED_RGBA_ASTC_10x10_KHR;
+					if (p === RGBA_ASTC_12x10_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR : extension.COMPRESSED_RGBA_ASTC_12x10_KHR;
+					if (p === RGBA_ASTC_12x12_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR : extension.COMPRESSED_RGBA_ASTC_12x12_KHR;
+				} else {
+					return null;
+				}
+			} // BPTC
+
 
 			if (p === RGBA_BPTC_Format) {
 				extension = extensions.get('EXT_texture_compression_bptc');
 
 				if (extension !== null) {
-					// TODO Complete?
-					return p;
+					if (p === RGBA_BPTC_Format) return encoding === sRGBEncoding ? extension.COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT : extension.COMPRESSED_RGBA_BPTC_UNORM_EXT;
 				} else {
 					return null;
 				}
-			}
+			} //
+
 
 			if (p === UnsignedInt248Type) {
 				if (isWebGL2) return gl.UNSIGNED_INT_24_8;
@@ -19365,7 +19387,9 @@
 			_isContextLost = true;
 		}
 
-		function onContextRestore() {
+		function
+			/* event */
+		onContextRestore() {
 			console.log('THREE.WebGLRenderer: Context Restored.');
 			_isContextLost = false;
 			const infoAutoReset = info.autoReset;
@@ -34006,15 +34030,15 @@
 			// TODO: delete this comment?
 			const distanceGeometry = new THREE.IcosahedronBufferGeometry( 1, 2 );
 			const distanceMaterial = new THREE.MeshBasicMaterial( { color: hexColor, fog: false, wireframe: true, opacity: 0.1, transparent: true } );
-			this.lightSphere = new THREE.Mesh( bulbGeometry, bulbMaterial );
+				this.lightSphere = new THREE.Mesh( bulbGeometry, bulbMaterial );
 			this.lightDistance = new THREE.Mesh( distanceGeometry, distanceMaterial );
-			const d = light.distance;
-			if ( d === 0.0 ) {
-				this.lightDistance.visible = false;
-			} else {
-				this.lightDistance.scale.set( d, d, d );
-			}
-			this.add( this.lightDistance );
+				const d = light.distance;
+				if ( d === 0.0 ) {
+					this.lightDistance.visible = false;
+				} else {
+					this.lightDistance.scale.set( d, d, d );
+				}
+				this.add( this.lightDistance );
 			*/
 		}
 
@@ -34031,12 +34055,12 @@
 			}
 			/*
 			const d = this.light.distance;
-				if ( d === 0.0 ) {
-					this.lightDistance.visible = false;
-				} else {
-					this.lightDistance.visible = true;
+					if ( d === 0.0 ) {
+						this.lightDistance.visible = false;
+					} else {
+						this.lightDistance.visible = true;
 				this.lightDistance.scale.set( d, d, d );
-				}
+					}
 			*/
 
 		}
@@ -34435,7 +34459,7 @@
 			1/___0/|
 			| 6__|_7
 			2/___3/
-				0: max.x, max.y, max.z
+					0: max.x, max.y, max.z
 			1: min.x, max.y, max.z
 			2: min.x, min.y, max.z
 			3: max.x, min.y, max.z
@@ -35085,10 +35109,14 @@
 	};
 
 	Loader.Handlers = {
-		add: function () {
+		add: function
+			/* regex, loader */
+		() {
 			console.error('THREE.Loader: Handlers.add() has been removed. Use LoadingManager.addHandler() instead.');
 		},
-		get: function () {
+		get: function
+			/* file */
+		() {
 			console.error('THREE.Loader: Handlers.get() has been removed. Use LoadingManager.getHandler() instead.');
 		}
 	};
@@ -35176,7 +35204,9 @@
 		return vector.applyMatrix3(this);
 	};
 
-	Matrix3.prototype.multiplyVector3Array = function () {
+	Matrix3.prototype.multiplyVector3Array = function
+		/* a */
+	() {
 		console.error('THREE.Matrix3: .multiplyVector3Array() has been removed.');
 	};
 
@@ -35185,7 +35215,9 @@
 		return attribute.applyMatrix3(this);
 	};
 
-	Matrix3.prototype.applyToVector3Array = function () {
+	Matrix3.prototype.applyToVector3Array = function
+		/* array, offset, length */
+	() {
 		console.error('THREE.Matrix3: .applyToVector3Array() has been removed.');
 	};
 
@@ -35229,7 +35261,9 @@
 		return vector.applyMatrix4(this);
 	};
 
-	Matrix4.prototype.multiplyVector3Array = function () {
+	Matrix4.prototype.multiplyVector3Array = function
+		/* a */
+	() {
 		console.error('THREE.Matrix4: .multiplyVector3Array() has been removed.');
 	};
 
@@ -35268,7 +35302,9 @@
 		return attribute.applyMatrix4(this);
 	};
 
-	Matrix4.prototype.applyToVector3Array = function () {
+	Matrix4.prototype.applyToVector3Array = function
+		/* array, offset, length */
+	() {
 		console.error('THREE.Matrix4: .applyToVector3Array() has been removed.');
 	};
 
@@ -35601,7 +35637,9 @@
 				console.warn('THREE.BufferAttribute: .dynamic has been deprecated. Use .usage instead.');
 				return this.usage === DynamicDrawUsage;
 			},
-			set: function () {
+			set: function
+				/* value */
+			() {
 				console.warn('THREE.BufferAttribute: .dynamic has been deprecated. Use .usage instead.');
 				this.setUsage(DynamicDrawUsage);
 			}
@@ -35614,9 +35652,13 @@
 		return this;
 	};
 
-	BufferAttribute.prototype.copyIndicesArray = function () {
+	BufferAttribute.prototype.copyIndicesArray = function
+		/* indices */
+	() {
 		console.error('THREE.BufferAttribute: .copyIndicesArray() has been removed.');
-	}, BufferAttribute.prototype.setArray = function () {
+	}, BufferAttribute.prototype.setArray = function
+		/* array */
+	() {
 		console.error('THREE.BufferAttribute: .setArray has been removed. Use BufferGeometry .setAttribute to replace/resize attribute buffers');
 	}; //
 
@@ -35691,7 +35733,9 @@
 		return this;
 	};
 
-	InterleavedBuffer.prototype.setArray = function () {
+	InterleavedBuffer.prototype.setArray = function
+		/* array */
+	() {
 		console.error('THREE.InterleavedBuffer: .setArray has been removed. Use BufferGeometry .setAttribute to replace/resize attribute buffers');
 	}; //
 
@@ -35925,7 +35969,9 @@
 				console.warn('THREE.WebGLRenderer: .shadowMapCullFace has been removed. Set Material.shadowSide instead.');
 				return undefined;
 			},
-			set: function () {
+			set: function
+				/* value */
+			() {
 				console.warn('THREE.WebGLRenderer: .shadowMapCullFace has been removed. Set Material.shadowSide instead.');
 			}
 		},
@@ -35985,7 +36031,9 @@
 				console.warn('THREE.WebGLRenderer: .shadowMap.cullFace has been removed. Set Material.shadowSide instead.');
 				return undefined;
 			},
-			set: function () {
+			set: function
+				/* cullFace */
+			() {
 				console.warn('THREE.WebGLRenderer: .shadowMap.cullFace has been removed. Set Material.shadowSide instead.');
 			}
 		},
@@ -36180,13 +36228,19 @@
 	} //
 
 	const SceneUtils = {
-		createMultiMaterialObject: function () {
+		createMultiMaterialObject: function
+			/* geometry, materials */
+		() {
 			console.error('THREE.SceneUtils has been moved to /examples/jsm/utils/SceneUtils.js');
 		},
-		detach: function () {
+		detach: function
+			/* child, parent, scene */
+		() {
 			console.error('THREE.SceneUtils has been moved to /examples/jsm/utils/SceneUtils.js');
 		},
-		attach: function () {
+		attach: function
+			/* child, scene, parent */
+		() {
 			console.error('THREE.SceneUtils has been moved to /examples/jsm/utils/SceneUtils.js');
 		}
 	}; //
@@ -36567,20 +36621,6 @@
 	exports.ReverseSubtractEquation = ReverseSubtractEquation;
 	exports.RingBufferGeometry = RingGeometry;
 	exports.RingGeometry = RingGeometry;
-	exports.SRGB8_ALPHA8_ASTC_10x10_Format = SRGB8_ALPHA8_ASTC_10x10_Format;
-	exports.SRGB8_ALPHA8_ASTC_10x5_Format = SRGB8_ALPHA8_ASTC_10x5_Format;
-	exports.SRGB8_ALPHA8_ASTC_10x6_Format = SRGB8_ALPHA8_ASTC_10x6_Format;
-	exports.SRGB8_ALPHA8_ASTC_10x8_Format = SRGB8_ALPHA8_ASTC_10x8_Format;
-	exports.SRGB8_ALPHA8_ASTC_12x10_Format = SRGB8_ALPHA8_ASTC_12x10_Format;
-	exports.SRGB8_ALPHA8_ASTC_12x12_Format = SRGB8_ALPHA8_ASTC_12x12_Format;
-	exports.SRGB8_ALPHA8_ASTC_4x4_Format = SRGB8_ALPHA8_ASTC_4x4_Format;
-	exports.SRGB8_ALPHA8_ASTC_5x4_Format = SRGB8_ALPHA8_ASTC_5x4_Format;
-	exports.SRGB8_ALPHA8_ASTC_5x5_Format = SRGB8_ALPHA8_ASTC_5x5_Format;
-	exports.SRGB8_ALPHA8_ASTC_6x5_Format = SRGB8_ALPHA8_ASTC_6x5_Format;
-	exports.SRGB8_ALPHA8_ASTC_6x6_Format = SRGB8_ALPHA8_ASTC_6x6_Format;
-	exports.SRGB8_ALPHA8_ASTC_8x5_Format = SRGB8_ALPHA8_ASTC_8x5_Format;
-	exports.SRGB8_ALPHA8_ASTC_8x6_Format = SRGB8_ALPHA8_ASTC_8x6_Format;
-	exports.SRGB8_ALPHA8_ASTC_8x8_Format = SRGB8_ALPHA8_ASTC_8x8_Format;
 	exports.Scene = Scene;
 	exports.SceneUtils = SceneUtils;
 	exports.ShaderChunk = ShaderChunk;
@@ -36685,3 +36725,4 @@
 	Object.defineProperty(exports, '__esModule', { value: true });
 
 }));
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidGhyZWUuanMiLCJzb3VyY2VzIjpbXSwic291cmNlc0NvbnRlbnQiOltdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiIn0=

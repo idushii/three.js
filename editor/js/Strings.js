@@ -23,6 +23,7 @@ function Strings( config ) {
 			'menubar/file/export/stl_binary': 'Export STL (Binary)',
 			'menubar/file/export/usdz': 'Export USDZ',
 			'menubar/file/publish': 'Publish',
+			'menubar/file/local_save_project': 'Local save project',
 
 			'menubar/edit': 'Edit',
 			'menubar/edit/undo': 'Undo (Ctrl+Z)',

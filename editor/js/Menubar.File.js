@@ -481,6 +481,117 @@ function MenubarFile( editor ) {
 	} );
 	options.add( option );
 
+	// Local save project
+
+	var option = new UIRow();
+	option.setClass('option');
+	option.setTextContent(strings.getKey('menubar/file/local_save_project'));
+	option.onClick(function () {
+
+		var toZip = {};
+
+		//
+
+		var output = editor.toJSON();
+		output.metadata.type = 'App';
+		delete output.history;
+
+		output = JSON.stringify(output, null, '\t');
+		output = output.replace(/[\n\t]+([\d\.e\-\[\]]+)/g, '$1');
+
+		toZip['app.json'] = strToU8(output);
+		toZip['app.json.source'] = strToU8(JSON.stringify(editor.toJSON()));
+
+		//
+
+		var title = config.getKey('project/title');
+
+		var manager = new THREE.LoadingManager(function () {
+
+			console.log({ toZip });
+
+			console.log({editor});
+
+			window.selectDirectory;
+			(async () => {
+
+				try {
+					if (!window.selectDirectory)
+						window.selectDirectory = await window.showDirectoryPicker({ startIn: 'desktop' });
+
+					for (let file in toZip) {
+						console.log(file);
+
+						const locName = file.replace('js/', '')
+
+						let newFile;
+						const dir1 = await window.selectDirectory.getDirectoryHandle('js', { create: true });
+
+						if (file.includes('js/')) {
+							newFile = await dir1.getFileHandle(locName, { create: true });
+						} else {
+							newFile = await window.selectDirectory.getFileHandle(locName, { create: true });
+						}
+						const writableStream = await newFile.createWritable();
+						await writableStream.write(toZip[file]);
+						await writableStream.close();
+					}
+
+				} catch (e) {
+					console.log(e);
+				}
+			})()
+		});
+
+		var loader = new THREE.FileLoader(manager);
+		loader.load('js/libs/app/index.html', function (content) {
+
+			content = content.replace('<!-- title -->', title);
+
+			var includes = [];
+
+			content = content.replace('<!-- includes -->', includes.join('\n\t\t'));
+
+			var editButton = '';
+
+			if (config.getKey('project/editable')) {
+
+				editButton = [
+					'			var button = document.createElement( \'a\' );',
+					'			button.href = \'https://threejs.org/editor/#file=\' + location.href.split( \'/\' ).slice( 0, - 1 ).join( \'/\' ) + \'/app.json\';',
+					'			button.style.cssText = \'position: absolute; bottom: 20px; right: 20px; padding: 10px 16px; color: #fff; border: 1px solid #fff; border-radius: 20px; text-decoration: none;\';',
+					'			button.target = \'_blank\';',
+					'			button.textContent = \'EDIT\';',
+					'			document.body.appendChild( button );',
+				].join('\n');
+
+			}
+
+			content = content.replace('\t\t\t/* edit button */', editButton);
+
+			toZip['index.html'] = strToU8(content);
+
+		});
+		loader.load('js/libs/app.js', function (content) {
+
+			toZip['js/app.js'] = strToU8(content);
+
+		});
+		loader.load('../build/three.module.js', function (content) {
+
+			toZip['js/three.module.js'] = strToU8(content);
+
+		});
+		loader.load('../examples/jsm/webxr/VRButton.js', function (content) {
+
+			toZip['js/VRButton.js'] = strToU8(content);
+
+		});
+
+	});
+	options.add(option);
+
+
 	//
 
 	var link = document.createElement( 'a' );
@@ -523,6 +634,7 @@ function MenubarFile( editor ) {
 		return animations;
 
 	}
+
 
 	return container;
 
